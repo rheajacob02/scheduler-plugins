@@ -75,6 +75,8 @@ local-image: PLATFORMS="linux/$$(uname -m)"
 local-image: RELEASE_VERSION="v0.0.0"
 local-image: REGISTRY="localhost:5000/scheduler-plugins"
 local-image: EXTRA_ARGS="--load"
+# Use Go version from go.mod (required for build to succeed)
+local-image: GO_BASE_IMAGE=golang:$(GO_VERSION)
 local-image: clean build-images
 
 .PHONY: release-images

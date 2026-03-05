@@ -38,34 +38,56 @@ if [[ "${BUILDER}" == "podman" ]]; then
 fi
 
 cd "${SCRIPT_ROOT}"
-IMAGE_BUILD_CMD=${DOCKER_BUILDX_CMD:-${BUILDER} buildx}
 
-# use RELEASE_VERSION==v0.0.0 to tell if it's a local image build.
-BLD_INSTANCE=""
+# For local builds (v0.0.0), use plain "docker build" so we don't require buildx or --platform
+# (many Docker installs use the legacy builder which doesn't support --platform).
 if [[ "${RELEASE_VERSION}" == "v0.0.0" ]]; then
-  BLD_INSTANCE=$($IMAGE_BUILD_CMD create --use)
-fi
+  # Set TARGETARCH so the Dockerfile's RUN step builds for the current machine (legacy builder doesn't set it).
+  case "$(uname -m)" in
+    x86_64) TARGETARCH=amd64 ;;
+    aarch64|arm64) TARGETARCH=arm64 ;;
+    *) TARGETARCH=amd64 ;;
+  esac
+  ${BUILDER} build \
+    -f ${SCHEDULER_DIR}/Dockerfile \
+    --build-arg RELEASE_VERSION=${RELEASE_VERSION} \
+    --build-arg GO_BASE_IMAGE=${GO_BASE_IMAGE} \
+    --build-arg DISTROLESS_BASE_IMAGE=${DISTROLESS_BASE_IMAGE} \
+    --build-arg TARGETARCH=${TARGETARCH} \
+    --build-arg CGO_ENABLED=0 \
+    -t ${REGISTRY}/${IMAGE} .
+  ${BUILDER} build \
+    -f ${CONTROLLER_DIR}/Dockerfile \
+    --build-arg RELEASE_VERSION=${RELEASE_VERSION} \
+    --build-arg GO_BASE_IMAGE=${GO_BASE_IMAGE} \
+    --build-arg DISTROLESS_BASE_IMAGE=${DISTROLESS_BASE_IMAGE} \
+    --build-arg TARGETARCH=${TARGETARCH} \
+    --build-arg CGO_ENABLED=0 \
+    -t ${REGISTRY}/${CONTROLLER_IMAGE} .
+else
+  IMAGE_BUILD_CMD=${DOCKER_BUILDX_CMD:-${BUILDER} buildx}
+  BLD_INSTANCE=""
+  BLD_INSTANCE=$($IMAGE_BUILD_CMD create --use 2>/dev/null) || true
 
-# DOCKER_BUILDX_CMD is an env variable set in CI (valued as "/buildx-entrypoint")
-# If it's set, use it; otherwise use "$BUILDER buildx"
-${IMAGE_BUILD_CMD} build \
-  --platform=${PLATFORMS} \
-  -f ${SCHEDULER_DIR}/Dockerfile \
-  --build-arg RELEASE_VERSION=${RELEASE_VERSION} \
-  --build-arg GO_BASE_IMAGE=${GO_BASE_IMAGE} \
-  --build-arg DISTROLESS_BASE_IMAGE=${DISTROLESS_BASE_IMAGE} \
-  --build-arg CGO_ENABLED=0 \
-  ${EXTRA_ARGS:-}  ${TAG_FLAG:-} ${REGISTRY}/${IMAGE} .
+  ${IMAGE_BUILD_CMD} build \
+    --platform=${PLATFORMS} \
+    -f ${SCHEDULER_DIR}/Dockerfile \
+    --build-arg RELEASE_VERSION=${RELEASE_VERSION} \
+    --build-arg GO_BASE_IMAGE=${GO_BASE_IMAGE} \
+    --build-arg DISTROLESS_BASE_IMAGE=${DISTROLESS_BASE_IMAGE} \
+    --build-arg CGO_ENABLED=0 \
+    ${EXTRA_ARGS:-} ${TAG_FLAG:-} ${REGISTRY}/${IMAGE} .
 
-${IMAGE_BUILD_CMD} build \
-  --platform=${PLATFORMS} \
-  -f ${CONTROLLER_DIR}/Dockerfile \
-  --build-arg RELEASE_VERSION=${RELEASE_VERSION} \
-  --build-arg GO_BASE_IMAGE=${GO_BASE_IMAGE} \
-  --build-arg DISTROLESS_BASE_IMAGE=${DISTROLESS_BASE_IMAGE} \
-  --build-arg CGO_ENABLED=0 \
-  ${EXTRA_ARGS:-} ${TAG_FLAG:-} ${REGISTRY}/${CONTROLLER_IMAGE} .
+  ${IMAGE_BUILD_CMD} build \
+    --platform=${PLATFORMS} \
+    -f ${CONTROLLER_DIR}/Dockerfile \
+    --build-arg RELEASE_VERSION=${RELEASE_VERSION} \
+    --build-arg GO_BASE_IMAGE=${GO_BASE_IMAGE} \
+    --build-arg DISTROLESS_BASE_IMAGE=${DISTROLESS_BASE_IMAGE} \
+    --build-arg CGO_ENABLED=0 \
+    ${EXTRA_ARGS:-} ${TAG_FLAG:-} ${REGISTRY}/${CONTROLLER_IMAGE} .
 
-if [[ ! -z $BLD_INSTANCE ]]; then
-  ${DOCKER_BUILDX_CMD:-${BUILDER} buildx} rm $BLD_INSTANCE
+  if [[ -n "${BLD_INSTANCE}" ]]; then
+    ${DOCKER_BUILDX_CMD:-${BUILDER} buildx} rm "${BLD_INSTANCE}" 2>/dev/null || true
+  fi
 fi

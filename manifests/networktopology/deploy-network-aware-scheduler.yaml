@@ -1,0 +1,37 @@
+# Deploy the scheduler-plugins kube-scheduler as a second scheduler (network-aware-scheduler).
+# Prerequisites: ConfigMap "network-aware-scheduler-config" in kube-system (Step 5.1),
+# RBAC from cluster-role.yaml, and the scheduler image loaded on the node.
+# Set "image" to the image you built and loaded (e.g. scheduler-plugins/kube-scheduler:latest
+# after retag, or localhost:5000/scheduler-plugins/kube-scheduler:v0.0.0 with imagePullPolicy: Never).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: network-aware-scheduler
+  namespace: kube-system
+  labels:
+    component: network-aware-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: network-aware-scheduler
+  template:
+    metadata:
+      labels:
+        component: network-aware-scheduler
+    spec:
+      serviceAccountName: network-aware-scheduler
+      containers:
+        - name: scheduler
+          image: scheduler-plugins/kube-scheduler:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config=/etc/kubernetes/scheduler-config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/kubernetes
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: network-aware-scheduler-config
