@@ -11,16 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Defaults for legacy Docker builder (BuildKit sets these automatically).
+ARG BUILDPLATFORM=linux/amd64
+ARG TARGETARCH=amd64
 ARG GO_BASE_IMAGE
 ARG DISTROLESS_BASE_IMAGE=gcr.io/distroless/static:nonroot
-FROM --platform=${BUILDPLATFORM} $GO_BASE_IMAGE AS builder
+FROM $GO_BASE_IMAGE AS builder
 
 WORKDIR /workspace
 COPY . .
 ARG TARGETARCH
 RUN make build-controller GO_BUILD_ENV='CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH}'
 
-FROM --platform=${BUILDPLATFORM} $DISTROLESS_BASE_IMAGE
+FROM $DISTROLESS_BASE_IMAGE
 
 WORKDIR /bin
 COPY --from=builder /workspace/bin/controller .
