@@ -34,7 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginconfig "sigs.k8s.io/scheduler-plugins/apis/config"
-	networkawareutil "sigs.k8s.io/scheduler-plugins/pkg/networkaware/util"
+	networkawareutil 	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/util"
+	"sigs.k8s.io/scheduler-plugins/pkg/trimaran"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 
 	agv1alpha1 "github.com/diktyo-io/appgroup-api/pkg/apis/appgroup/v1alpha1"
@@ -77,9 +78,10 @@ type NetworkOverhead struct {
 	logger      klog.Logger
 	podLister   corelisters.PodLister
 	handle      framework.Handle
-	namespaces  []string
-	weightsName string
-	ntName      string
+	namespaces              []string
+	weightsName             string
+	ntName                  string
+	capacityWeightPercent   int32 // 0-100; 0 = network cost only
 }
 
 // PreFilterState computed at PreFilter and used at Filter and Score.
@@ -148,19 +150,27 @@ func New(ctx context.Context, obj runtime.Object, handle framework.Handle) (fram
 	if err != nil {
 		return nil, err
 	}
+	cw := args.CapacityWeightPercent
+	if cw < 0 {
+		cw = 0
+	}
+	if cw > 100 {
+		cw = 100
+	}
 	c, _, err := util.NewClientWithCachedReader(ctx, handle.KubeConfig(), scheme)
 	if err != nil {
 		return nil, err
 	}
 
 	no := &NetworkOverhead{
-		Client:      c,
-		logger:      logger,
-		podLister:   handle.SharedInformerFactory().Core().V1().Pods().Lister(),
-		handle:      handle,
-		namespaces:  args.Namespaces,
-		weightsName: args.WeightsName,
-		ntName:      args.NetworkTopologyName,
+		Client:                c,
+		logger:                logger,
+		podLister:             handle.SharedInformerFactory().Core().V1().Pods().Lister(),
+		handle:                handle,
+		namespaces:            args.Namespaces,
+		weightsName:           args.WeightsName,
+		ntName:                args.NetworkTopologyName,
+		capacityWeightPercent: cw,
 	}
 	return no, nil
 }
@@ -380,10 +390,20 @@ func (no *NetworkOverhead) Score(ctx context.Context,
 		return score, fwk.NewStatus(fwk.Success, "scoreEqually enabled: minimum score")
 	}
 
-	// Return Accumulated Cost as score
-	score = preFilterState.finalCostMap[nodeName]
-	logger.V(4).Info("Score:", "pod", pod.GetName(), "node", nodeName, "finalScore", score)
-	return score, fwk.NewStatus(fwk.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
+	// Raw score: network cost plus optional capacity penalty (higher utilization => higher raw score).
+	networkCost := preFilterState.finalCostMap[nodeName]
+	score = networkCost
+	if no.capacityWeightPercent > 0 {
+		capPenalty := capacityUtilizationPenalty(nodeInfo, pod)
+		score = networkCost + (capPenalty*int64(no.capacityWeightPercent))/100
+		logger.V(4).Info("Score with capacity",
+			"pod", pod.GetName(), "node", nodeName,
+			"networkCost", networkCost, "capacityPenalty", capPenalty,
+			"capacityWeightPercent", no.capacityWeightPercent, "combinedRawScore", score)
+	} else {
+		logger.V(4).Info("Score:", "pod", pod.GetName(), "node", nodeName, "finalScore", score)
+	}
+	return score, fwk.NewStatus(fwk.Success, "network cost (+ optional capacity penalty); normalization favors lower raw scores")
 }
 
 // NormalizeScore : normalize scores since lower scores correspond to lower latency
@@ -636,6 +656,41 @@ func (no *NetworkOverhead) getAccumulatedCost(
 		}
 	}
 	return cost, nil
+}
+
+// capacityUtilizationPenalty returns 0–100: higher when the node would be fuller after scheduling
+// this pod (average of CPU and memory request utilization). Scaled to sit alongside network costs.
+func capacityUtilizationPenalty(nodeInfo fwk.NodeInfo, pod *corev1.Pod) int64 {
+	if nodeInfo.Node() == nil {
+		return 100
+	}
+	podReq := trimaran.GetResourceRequested(pod)
+	alloc := nodeInfo.GetAllocatable()
+	reqOnNode := nodeInfo.GetNonZeroRequested()
+
+	var cpuFrac, memFrac float64
+	if capMilli := alloc.GetMilliCPU(); capMilli > 0 {
+		used := reqOnNode.GetMilliCPU() + podReq.MilliCPU
+		cpuFrac = float64(used) / float64(capMilli)
+	} else {
+		cpuFrac = 1
+	}
+	if cpuFrac > 1 {
+		cpuFrac = 1
+	}
+
+	if capMem := alloc.GetMemory(); capMem > 0 {
+		used := reqOnNode.GetMemory() + podReq.Memory
+		memFrac = float64(used) / float64(capMem)
+	} else {
+		memFrac = 1
+	}
+	if memFrac > 1 {
+		memFrac = 1
+	}
+
+	avg := (cpuFrac + memFrac) / 2
+	return int64(avg * 100)
 }
 
 func getPreFilterState(cycleState fwk.CycleState) (*PreFilterState, error) {

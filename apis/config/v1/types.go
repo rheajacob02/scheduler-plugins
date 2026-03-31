@@ -264,6 +264,10 @@ type NetworkOverheadArgs struct {
 
 	// The NetworkTopology CRD name
 	NetworkTopologyName *string `json:"networkTopologyName,omitempty"`
+
+	// CapacityWeightPercent is 0-100: portion of the raw score from CPU/memory utilization
+	// (fuller nodes get a higher penalty). 0 means network cost only (default).
+	CapacityWeightPercent *int32 `json:"capacityWeightPercent,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

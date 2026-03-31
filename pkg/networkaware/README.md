@@ -62,6 +62,7 @@ profiles:
             - "default"
           weightsName: "UserDefined" # The respective weights to consider in the plugins
           networkTopologyName: "net-topology-test" # networkTopology CR to be used by the plugins
+          capacityWeightPercent: 30 # optional 0-100; 0 = network cost only; >0 adds CPU/memory utilization penalty
 ```
 
 ## Summary

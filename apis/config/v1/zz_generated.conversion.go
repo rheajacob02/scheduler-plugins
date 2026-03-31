@@ -347,6 +347,9 @@ func autoConvert_v1_NetworkOverheadArgs_To_config_NetworkOverheadArgs(in *Networ
 	if err := metav1.Convert_Pointer_string_To_string(&in.NetworkTopologyName, &out.NetworkTopologyName, s); err != nil {
 		return err
 	}
+	if err := metav1.Convert_Pointer_int32_To_int32(&in.CapacityWeightPercent, &out.CapacityWeightPercent, s); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -361,6 +364,9 @@ func autoConvert_config_NetworkOverheadArgs_To_v1_NetworkOverheadArgs(in *config
 		return err
 	}
 	if err := metav1.Convert_string_To_Pointer_string(&in.NetworkTopologyName, &out.NetworkTopologyName, s); err != nil {
+		return err
+	}
+	if err := metav1.Convert_int32_To_Pointer_int32(&in.CapacityWeightPercent, &out.CapacityWeightPercent, s); err != nil {
 		return err
 	}
 	return nil
