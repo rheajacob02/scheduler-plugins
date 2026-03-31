@@ -108,9 +108,10 @@ profiles:
 						{
 							Name: networkoverhead.Name,
 							Args: &config.NetworkOverheadArgs{
-								Namespaces:          []string{"networkAware"},
-								WeightsName:         "netCosts",
-								NetworkTopologyName: "net-topology-v1",
+								Namespaces:              []string{"networkAware"},
+								WeightsName:             "netCosts",
+								NetworkTopologyName:     "net-topology-v1",
+								CapacityWeightPercent:   0,
 							},
 						},
 						{
@@ -183,9 +184,10 @@ profiles:
 						{
 							Name: networkoverhead.Name,
 							Args: &config.NetworkOverheadArgs{
-								Namespaces:          []string{"default"},
-								WeightsName:         "UserDefined",
-								NetworkTopologyName: "nt-default",
+								Namespaces:              []string{"default"},
+								WeightsName:             "UserDefined",
+								NetworkTopologyName:     "nt-default",
+								CapacityWeightPercent:   0,
 							},
 						},
 						{
@@ -343,9 +345,10 @@ func TestCodecsEncodePluginConfig(t *testing.T) {
 							{
 								Name: networkoverhead.Name,
 								Args: &config.NetworkOverheadArgs{
-									Namespaces:          []string{"default"},
-									WeightsName:         "netCosts",
-									NetworkTopologyName: "net-topology-v1",
+									Namespaces:              []string{"default"},
+									WeightsName:             "netCosts",
+									NetworkTopologyName:     "net-topology-v1",
+									CapacityWeightPercent:   0,
 								},
 							},
 						},

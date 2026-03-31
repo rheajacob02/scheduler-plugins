@@ -42,3 +42,4 @@ data:
                 - "default"
               weightsName: "UserDefined" # or "NetperfCosts"
               networkTopologyName: "net-topology-test"
+              # Optional: capacityWeightPercent: 30  # 1-100 blends CPU/memory utilization into raw score (fuller nodes penalized)

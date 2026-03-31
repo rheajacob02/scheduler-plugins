@@ -186,6 +186,11 @@ func (in *NetworkOverheadArgs) DeepCopyInto(out *NetworkOverheadArgs) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.CapacityWeightPercent != nil {
+		in, out := &in.CapacityWeightPercent, &out.CapacityWeightPercent
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
