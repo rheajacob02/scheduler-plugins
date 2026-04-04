@@ -27,6 +27,8 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - --config=/etc/kubernetes/scheduler-config.yaml
+            # Cluster has no resource.k8s.io (DRA) APIs; v1.34 scheduler otherwise starts DRA informers and never finishes cache sync.
+            - --feature-gates=DynamicResourceAllocation=false
           volumeMounts:
             - name: config
               mountPath: /etc/kubernetes

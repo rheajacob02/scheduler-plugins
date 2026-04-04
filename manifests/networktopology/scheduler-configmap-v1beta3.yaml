@@ -1,3 +1,5 @@
+# Prefer kubescheduler.config.k8s.io/v1: many current kube-scheduler binaries no longer
+# register v1beta3 (you would see: no kind "KubeSchedulerConfiguration" is registered for version "v1beta3").
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -5,32 +7,24 @@ metadata:
   namespace: kube-system
 data:
   scheduler-config.yaml: |
-    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    apiVersion: kubescheduler.config.k8s.io/v1
     kind: KubeSchedulerConfiguration
     leaderElection:
       leaderElect: false
-    clientConnection:
-      kubeconfig: "/etc/kubernetes/scheduler.conf"
     profiles:
       - schedulerName: network-aware-scheduler
         plugins:
+          multiPoint:
+            enabled:
+              - name: NetworkOverhead
+                weight: 5
+            disabled:
+              - name: NodeResourcesFit
           queueSort:
             enabled:
               - name: TopologicalSort
             disabled:
               - name: "*"
-          preFilter:
-            enabled:
-              - name: NetworkOverhead
-          filter:
-            enabled:
-              - name: NetworkOverhead
-          score:
-            disabled: # Preferably avoid the combination of NodeResourcesFit with NetworkOverhead
-              - name: NodeResourcesFit
-            enabled: # A higher weight is given to NetworkOverhead to favor allocation schemes with lower latency.
-              - name: NetworkOverhead
-                weight: 5
         pluginConfig:
           - name: TopologicalSort
             args:
@@ -40,6 +34,5 @@ data:
             args:
               namespaces:
                 - "default"
-              weightsName: "UserDefined" # or "NetperfCosts"
+              weightsName: "UserDefined"
               networkTopologyName: "net-topology-test"
-              # Optional: capacityWeightPercent: 30  # 1-100 blends CPU/memory utilization into raw score (fuller nodes penalized)
