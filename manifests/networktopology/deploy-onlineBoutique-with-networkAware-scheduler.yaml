@@ -16,14 +16,7 @@ spec:
     spec:
       schedulerName: network-aware-scheduler # Do not forget the scheduler name!
       terminationGracePeriodSeconds: 5
-      initContainers:
-        - name: sfx-instrumentation
-          image: quay.io/signalfuse/sfx-zero-config-agent:latest
-          # image: sfx-zero-config-agent
-          # imagePullPolicy: Never
-          volumeMounts:
-            - mountPath: /opt/sfx/
-              name: sfx-instrumentation
+      # No SignalFx init container: quay.io/signalfuse/sfx-zero-config-agent is often unreachable from CloudLab (Init:ImagePullBackOff).
       containers:
         - name: server
           image: quay.io/signalfuse/microservices-demo-adservice:433c23881a
@@ -32,41 +25,25 @@ spec:
           env:
             - name: PORT
               value: '9555'
-            - name: OTEL_EXPORTER_ZIPKIN_SERVICE_NAME
-              value: adservice
-            - name: NODE_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
-            - name: OTEL_EXPORTER
-              value: zipkin
-            - name: JAVA_TOOL_OPTIONS
-              value: -javaagent:/opt/sfx/splunk-otel-javaagent-all.jar
-            - name: OTEL_EXPORTER_ZIPKIN_ENDPOINT
-              value: 'http://$(NODE_IP):9411/v1/trace'
-          volumeMounts:
-            - mountPath: /opt/sfx
-              name: sfx-instrumentation
           resources:
             requests:
-              cpu: 200m
-              memory: 180Mi
-            limits:
               cpu: 300m
-              memory: 300Mi
+              memory: 384Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
           readinessProbe:
             initialDelaySeconds: 60
             periodSeconds: 25
+            timeoutSeconds: 5
             exec:
-              command: ['/bin/grpc_health_probe', '-addr=:9555']
+              command: ['/bin/grpc_health_probe', '-addr=:9555', '-rpc-timeout=5s']
           livenessProbe:
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 30
+            timeoutSeconds: 5
             exec:
-              command: ['/bin/grpc_health_probe', '-addr=:9555']
-      volumes:
-        - emptyDir: {}
-          name: sfx-instrumentation
+              command: ['/bin/grpc_health_probe', '-addr=:9555', '-rpc-timeout=5s']
 ---
 apiVersion: v1
 kind: Service
@@ -99,6 +76,16 @@ spec:
     spec:
       schedulerName: network-aware-scheduler
       terminationGracePeriodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - cartservice
+              topologyKey: kubernetes.io/hostname
       containers:
       - name: server
         image: quay.io/signalfuse/microservices-demo-cartservice:433c23881a
@@ -121,9 +108,9 @@ spec:
         - name: SIGNALFX_SERVICE_NAME
           value: "cartservice"
         - name: SIGNALFX_SERVER_TIMING_CONTEXT
-          value: "true"
+          value: "false"
         - name: SIGNALFX_TRACE_DEBUG
-          value: "true"
+          value: "false"
         - name: SIGNALFX_ENV
           value: "demo"
         - name: EXTERNAL_DB_NAME
@@ -137,19 +124,24 @@ spec:
         resources:
           requests:
             cpu: 200m
-            memory: 64Mi
+            memory: 384Mi
           limits:
-            cpu: 300m
-            memory: 128Mi
+            cpu: 500m
+            memory: 768Mi
         readinessProbe:
           initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 10
+          failureThreshold: 6
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=5s"]
+            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=10s"]
         livenessProbe:
-          initialDelaySeconds: 15
-          periodSeconds: 10
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 5
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=5s"]
+            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=10s"]
 ---
 apiVersion: v1
 kind: Service
@@ -181,17 +173,38 @@ spec:
         appgroup.diktyo.x-k8s.io.workload: checkoutservice
     spec:
       schedulerName: network-aware-scheduler
+      terminationGracePeriodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - checkoutservice
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: server
           image: quay.io/signalfuse/microservices-demo-checkoutservice:433c23881a
           ports:
           - containerPort: 5050
           readinessProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 6
             exec:
-              command: ["/bin/grpc_health_probe", "-addr=:5050"]
+              command: ["/bin/grpc_health_probe", "-addr=:5050", "-rpc-timeout=10s"]
           livenessProbe:
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 5
             exec:
-              command: ["/bin/grpc_health_probe", "-addr=:5050"]
+              command: ["/bin/grpc_health_probe", "-addr=:5050", "-rpc-timeout=10s"]
           env:
           - name: PORT
             value: "5050"
@@ -220,11 +233,11 @@ spec:
             value: "25"
           resources:
             requests:
-              cpu: 100m
-              memory: 64Mi
-            limits:
               cpu: 200m
-              memory: 128Mi
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
@@ -257,6 +270,18 @@ spec:
     spec:
       schedulerName: network-aware-scheduler
       terminationGracePeriodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - currencyservice
+                topologyKey: kubernetes.io/hostname
       containers:
       - name: server
         image: quay.io/signalfuse/microservices-demo-currencyservice:433c23881a
@@ -274,18 +299,26 @@ spec:
           # value: "http://zipkin.default:9411/api/v2/spans"
           value: "http://$(NODE_IP):9411/api/v2/spans"
         readinessProbe:
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 10
+          failureThreshold: 6
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+            command: ["/bin/grpc_health_probe", "-addr=:7000", "-rpc-timeout=10s"]
         livenessProbe:
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 5
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+            command: ["/bin/grpc_health_probe", "-addr=:7000", "-rpc-timeout=10s"]
         resources:
           requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
             cpu: 200m
             memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
@@ -368,13 +401,28 @@ spec:
         sidecar.istio.io/rewriteAppHTTPProbers: "true"
     spec:
       schedulerName: network-aware-scheduler
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - frontend
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: server
           image: quay.io/signalfuse/microservices-demo-frontend:433c23881a
           ports:
           - containerPort: 8080
           readinessProbe:
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
             httpGet:
               path: "/_healthz"
               port: 8080
@@ -382,7 +430,10 @@ spec:
               - name: "Cookie"
                 value: "shop_session-id=x-readiness-probe"
           livenessProbe:
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
             httpGet:
               path: "/_healthz"
               port: 8080
@@ -428,11 +479,11 @@ spec:
             value: "true"
           resources:
             requests:
-              cpu: 100m
-              memory: 64Mi
-            limits:
-              cpu: 200m
+              cpu: 150m
               memory: 128Mi
+            limits:
+              cpu: 400m
+              memory: 256Mi
 ---
 apiVersion: v1
 kind: Service
@@ -632,19 +683,37 @@ spec:
     spec:
       schedulerName: network-aware-scheduler
       terminationGracePeriodSeconds: 5
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - recommendationservice
+                topologyKey: kubernetes.io/hostname
       containers:
       - name: server
         image: quay.io/signalfuse/microservices-demo-recommendationservice:433c23881a
         ports:
         - containerPort: 8080
         readinessProbe:
+          initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 10
+          failureThreshold: 6
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+            command: ["/bin/grpc_health_probe", "-addr=:8080", "-rpc-timeout=10s"]
         livenessProbe:
-          periodSeconds: 5
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 5
           exec:
-            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+            command: ["/bin/grpc_health_probe", "-addr=:8080", "-rpc-timeout=10s"]
         env:
         - name: PORT
           value: "8080"
@@ -659,11 +728,11 @@ spec:
           # value: "http://zipkin.default:9411/api/v2/spans"
         resources:
           requests:
-            cpu: 100m
-            memory: 220Mi
-          limits:
             cpu: 200m
-            memory: 450Mi
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
