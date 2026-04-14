@@ -22,7 +22,14 @@ spec:
         selector: cartservice
         apiVersion: apps/v1
         namespace: default
-      dependencies: []
+      dependencies:
+        - workload:
+            kind: Deployment
+            name: redis-cart
+            selector: redis-cart
+            apiVersion: apps/v1
+            namespace: default
+          maxNetworkCost: 10
     - workload:
         kind: Deployment
         name: checkoutservice
@@ -58,6 +65,20 @@ spec:
             apiVersion: apps/v1
             namespace: default
           maxNetworkCost: 10
+        - workload:
+            kind: Deployment
+            name: paymentservice
+            selector: paymentservice
+            apiVersion: apps/v1
+            namespace: default
+          maxNetworkCost: 10
+        - workload:
+            kind: Deployment
+            name: emailservice
+            selector: emailservice
+            apiVersion: apps/v1
+            namespace: default
+          maxNetworkCost: 10
     - workload:
         kind: Deployment
         name: currencyservice
@@ -79,6 +100,13 @@ spec:
         apiVersion: apps/v1
         namespace: default
       dependencies:
+        - workload:
+            kind: Deployment
+            name: adservice
+            selector: adservice
+            apiVersion: apps/v1
+            namespace: default
+          maxNetworkCost: 10
         - workload:
             kind: Deployment
             name: productcatalogservice
