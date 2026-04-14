@@ -1,5 +1,10 @@
 # Prefer kubescheduler.config.k8s.io/v1: many current kube-scheduler binaries no longer
 # register v1beta3 (you would see: no kind "KubeSchedulerConfiguration" is registered for version "v1beta3").
+#
+# Policy: AppGroup/network cost is a *preference* (NetworkOverhead Score + PreFilter state only).
+# Disable NetworkOverhead *Filter* so maxNetworkCost does not hard-remove nodes.
+# Raise PodTopologySpread score weight so topologySpreadConstraints beat network preference.
+# capacityWeightPercent + LeastAllocated scoring nudge away from busy nodes.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -17,9 +22,22 @@ data:
           multiPoint:
             enabled:
               - name: NetworkOverhead
-                weight: 5
+                weight: 2
+          preFilter:
+            enabled:
+              - name: PodTopologySpread
+          filter:
             disabled:
-              - name: NodeResourcesFit
+              - name: NetworkOverhead
+            enabled:
+              - name: PodTopologySpread
+          preScore:
+            enabled:
+              - name: PodTopologySpread
+          score:
+            enabled:
+              - name: PodTopologySpread
+                weight: 10
           queueSort:
             enabled:
               - name: TopologicalSort
@@ -36,3 +54,13 @@ data:
                 - "default"
               weightsName: "UserDefined"
               networkTopologyName: "net-topology-test"
+              capacityWeightPercent: 40
+          - name: NodeResourcesFit
+            args:
+              scoringStrategy:
+                type: LeastAllocated
+                resources:
+                  - name: cpu
+                    weight: 1
+                  - name: memory
+                    weight: 1

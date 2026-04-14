@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: adservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: adservice
@@ -16,6 +16,13 @@ spec:
     spec:
       schedulerName: network-aware-scheduler # Do not forget the scheduler name!
       terminationGracePeriodSeconds: 5
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: adservice
       # No SignalFx init container: quay.io/signalfuse/sfx-zero-config-agent is often unreachable from CloudLab (Init:ImagePullBackOff).
       containers:
         - name: server
@@ -63,7 +70,7 @@ kind: Deployment
 metadata:
   name: cartservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: cartservice
@@ -78,14 +85,23 @@ spec:
       terminationGracePeriodSeconds: 5
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - cartservice
-              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - cartservice
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: cartservice
       containers:
       - name: server
         image: quay.io/signalfuse/microservices-demo-cartservice:433c23881a
@@ -108,8 +124,6 @@ spec:
         - name: SIGNALFX_SERVICE_NAME
           value: "cartservice"
         - name: SIGNALFX_SERVER_TIMING_CONTEXT
-          value: "false"
-        - name: SIGNALFX_TRACE_DEBUG
           value: "false"
         - name: SIGNALFX_ENV
           value: "demo"
@@ -161,7 +175,7 @@ kind: Deployment
 metadata:
   name: checkoutservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: checkoutservice
@@ -186,6 +200,13 @@ spec:
                       values:
                         - checkoutservice
                 topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: checkoutservice
       containers:
         - name: server
           image: quay.io/signalfuse/microservices-demo-checkoutservice:433c23881a
@@ -257,7 +278,7 @@ kind: Deployment
 metadata:
   name: currencyservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: currencyservice
@@ -282,6 +303,13 @@ spec:
                       values:
                         - currencyservice
                 topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: currencyservice
       containers:
       - name: server
         image: quay.io/signalfuse/microservices-demo-currencyservice:433c23881a
@@ -338,7 +366,7 @@ kind: Deployment
 metadata:
   name: emailservice-deployment
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: emailservice
@@ -351,6 +379,13 @@ spec:
     spec:
       schedulerName: network-aware-scheduler
       terminationGracePeriodSeconds: 5
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: emailservice
       containers:
       - name: server
         image: quay.io/signalfuse/microservices-demo-emailservice:433c23881a
@@ -387,7 +422,7 @@ kind: Deployment
 metadata:
   name: frontend
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: frontend
@@ -413,6 +448,13 @@ spec:
                       values:
                         - frontend
                 topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: frontend
       containers:
         - name: server
           image: quay.io/signalfuse/microservices-demo-frontend:433c23881a
@@ -522,7 +564,7 @@ kind: Deployment
 metadata:
   name: paymentservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: paymentservice
@@ -610,7 +652,7 @@ kind: Deployment
 metadata:
   name: productcatalogservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: productcatalogservice
@@ -670,7 +712,7 @@ kind: Deployment
 metadata:
   name: recommendationservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: recommendationservice
@@ -753,7 +795,7 @@ kind: Deployment
 metadata:
   name: redis-cart
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: redis-cart
@@ -810,7 +852,7 @@ kind: Deployment
 metadata:
   name: shippingservice
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: shippingservice
